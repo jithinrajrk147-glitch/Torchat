@@ -1,0 +1,313 @@
+name: Build Onion Chat APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.4
+
+      - name: Create Full Android Project
+        run: |
+          # Clean old
+          rm -rf app build gradle
+          
+          # Create dirs
+          mkdir -p app/src/main/java/com/onion/chat
+          mkdir -p app/src/main/assets
+          mkdir -p gradle/wrapper
+          
+          # Copy your UI
+          if [ -f index.html ]; then
+            cp index.html app/src/main/assets/index.html
+          else
+            echo "<h1>No index.html found</h1>" > app/src/main/assets/index.html
+          fi
+
+          # gradle wrapper properties
+          cat > gradle/wrapper/gradle-wrapper.properties <<'EOF'
+          distributionBase=GRADLE_USER_HOME
+          distributionPath=wrapper/dists
+          distributionUrl=https\://services.gradle.org/distributions/gradle-8.4-bin.zip
+          networkTimeout=10000
+          validateDistributionUrl=true
+          zipStoreBase=GRADLE_USER_HOME
+          zipStorePath=wrapper/dists
+          EOF
+
+          cat > gradle/wrapper/gradle-wrapper.jar <<'EOF'
+          dummy
+          EOF
+          
+          # Download real wrapper jar
+          curl -sL https://github.com/gradle/gradle/raw/v8.4.0/gradle/wrapper/gradle-wrapper.jar -o gradle/wrapper/gradle-wrapper.jar
+
+          cat > gradlew <<'EOF'
+          #!/bin/sh
+          GRADLE_HOME="$(dirname "$0")/gradle/wrapper"
+          exec java -jar "$GRADLE_HOME/gradle-wrapper.jar" "$@"
+          EOF
+          chmod +x gradlew
+
+          # Root build.gradle
+          cat > build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application' version '8.1.4' apply false
+              id 'org.jetbrains.kotlin.android' version '1.9.10' apply false
+          }
+          EOF
+
+          cat > settings.gradle <<'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          include ':app'
+          EOF
+
+          # App build.gradle - THE REAL TOR DEPENDENCY
+          cat > app/build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application'
+              id 'org.jetbrains.kotlin.android'
+          }
+          android {
+              namespace 'com.onion.chat'
+              compileSdk 34
+              defaultConfig {
+                  applicationId "com.onion.chat"
+                  minSdk 24
+                  targetSdk 34
+                  versionCode 1
+                  versionName "1.0"
+              }
+              buildTypes {
+                  release { minifyEnabled false }
+                  debug { minifyEnabled false }
+              }
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+              kotlinOptions { jvmTarget = '17' }
+          }
+          dependencies {
+              implementation 'androidx.appcompat:appcompat:1.6.1'
+              implementation 'org.torproject:tor-android:0.4.8.12'
+              implementation 'org.torproject:jtorctl:0.4'
+          }
+          EOF
+
+          cat > app/proguard-rules.pro <<'EOF'
+          -keep class org.torproject.** { *; }
+          EOF
+
+          # Manifest
+          cat > app/src/main/AndroidManifest.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <application
+                  android:allowBackup="true"
+                  android:label="Onion Chat"
+                  android:usesCleartextTraffic="true"
+                  android:theme="@android:style/Theme.NoTitleBar">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+                  <service android:name=".TorService" android:enabled="true" />
+              </application>
+          </manifest>
+          EOF
+
+          # MainActivity - 0 SEC ONION + REAL TOR CHAT
+          cat > app/src/main/java/com/onion/chat/MainActivity.kt <<'EOF'
+          package com.onion.chat
+          import android.annotation.SuppressLint
+          import android.os.Bundle
+          import android.webkit.*
+          import androidx.appcompat.app.AppCompatActivity
+          import java.io.File
+          import java.net.*
+          import java.util.concurrent.Executors
+
+          class MainActivity : AppCompatActivity() {
+              lateinit var web: WebView
+              val executor = Executors.newSingleThreadExecutor()
+
+              @SuppressLint("SetJavaScriptEnabled")
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  web = WebView(this)
+                  setContentView(web)
+                  web.settings.javaScriptEnabled = true
+                  web.settings.domStorageEnabled = true
+                  web.settings.allowFileAccess = true
+                  web.settings.allowUniversalAccessFromFileURLs = true
+                  web.addJavascriptInterface(this, "Android")
+                  web.webChromeClient = WebChromeClient()
+
+                  // Start Tor service
+                  startService(android.content.Intent(this, TorService::class.java))
+
+                  // Load UI
+                  web.loadUrl("file:///android_asset/index.html")
+
+                  // Server for incoming Tor messages on 8080
+                  executor.execute {
+                      try {
+                          val server = ServerSocket(8080)
+                          while (true) {
+                              val client = server.accept()
+                              val reader = client.getInputStream().bufferedReader()
+                              val msg = reader.readLine() ?: ""
+                              val from = client.inetAddress.hostAddress ?: "unknown"
+                              runOnUiThread {
+                                  val safeMsg = msg.replace("'","\\'")
+                                  val safeFrom = from.replace("'","\\'")
+                                  web.evaluateJavascript("onTorMessage('$safeFrom', '$safeMsg')", null)
+                              }
+                              client.close()
+                          }
+                      } catch (e: Exception) { e.printStackTrace() }
+                  }
+              }
+
+              @JavascriptInterface
+              fun getOnion() {
+                  executor.execute {
+                      try {
+                          Thread.sleep(1000)
+                          val hsFile = File(filesDir.path + "/tor/hidden_service/hostname")
+                          var onion = "Tor starting... wait 5 sec"
+                          if (hsFile.exists()) {
+                              onion = hsFile.readText().trim()
+                          } else {
+                              // Check cached
+                              val dir = File(filesDir, "tor/hidden_service")
+                              if (dir.exists()) onion = "Generating... ${dir.list()?.size} files"
+                          }
+                          val safe = onion.replace("'","\\'").replace("\n","")
+                          runOnUiThread {
+                              if (hsFile.exists()) web.evaluateJavascript("onTorReady('$safe')", null)
+                              else web.evaluateJavascript("setOnion('$safe', false)", null)
+                          }
+                      } catch (e: Exception) { }
+                  }
+              }
+
+              @JavascriptInterface
+              fun sendTor(friendOnion: String, msg: String) {
+                  executor.execute {
+                      try {
+                          val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", 9050))
+                          val socket = Socket(proxy)
+                          socket.connect(InetSocketAddress(friendOnion, 80), 15000)
+                          socket.getOutputStream().write(msg.toByteArray())
+                          socket.close()
+                      } catch (e: Exception) { e.printStackTrace() }
+                  }
+              }
+          }
+          EOF
+
+          # TorService - FAST 0 SEC
+          cat > app/src/main/java/com/onion/chat/TorService.kt <<'EOF'
+          package com.onion.chat
+          import android.app.Service
+          import android.content.Intent
+          import android.os.IBinder
+          import java.io.File
+
+          class TorService : Service() {
+              override fun onCreate() {
+                  super.onCreate()
+                  try {
+                      val dir = File(filesDir, "tor")
+                      val hs = File(dir, "hidden_service")
+                      hs.mkdirs()
+                      dir.mkdirs()
+                      val torrc = File(dir, "torrc")
+                      torrc.writeText("""
+                          DataDirectory ${dir.absolutePath}
+                          HiddenServiceDir ${hs.absolutePath}
+                          HiddenServicePort 80 127.0.0.1:8080
+                          HiddenServiceVersion 3
+                          SocksPort 9050
+                          ControlPort 9051
+                          AvoidDiskWrites 1
+                          CircuitBuildTimeout 10
+                          LearnCircuitBuildTimeout 0
+                          NumEntryGuards 1
+                      """.trimIndent())
+
+                      val libDir = applicationInfo.nativeLibraryDir
+                      val torFile = File(libDir, "libtor.so")
+                      if (!torFile.exists()) {
+                          // Try other names
+                          File(libDir).listFiles()?.forEach {
+                              if (it.name.contains("tor")) it.setExecutable(true)
+                          }
+                      }
+                      torFile.setExecutable(true)
+                      ProcessBuilder(torFile.absolutePath, "-f", torrc.absolutePath)
+                          .directory(dir)
+                          .redirectErrorStream(true)
+                          .start()
+                  } catch (e: Exception) { e.printStackTrace() }
+              }
+              override fun onBind(intent: Intent?): IBinder? = null
+          }
+          EOF
+
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          echo "Created all files"
+          ls -R app/src
+
+      - name: Build Debug APK
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: onion-chat-real-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
