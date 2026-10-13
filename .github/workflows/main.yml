@@ -8,14 +8,106 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
-      - name: Build
+
+      - name: Setup Android SDK - AUTO ACCEPT LICENSE
         run: |
-          echo "Workflow started!"
-          ls -la
-          echo "index.html exists?"
-          ls -la index.html || echo "NO INDEX.HTML - ADD IT"
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip
+          mkdir -p $HOME/android-sdk/cmdline-tools
+          unzip -q commandlinetools-linux-11076708_latest.zip -d $HOME/android-sdk/cmdline-tools
+          mv $HOME/android-sdk/cmdline-tools/cmdline-tools $HOME/android-sdk/cmdline-tools/latest
+          export ANDROID_HOME=$HOME/android-sdk
+          export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$PATH
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          echo "$ANDROID_HOME/platform-tools" >> $GITHUB_PATH
+          yes | sdkmanager --licenses
+          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          echo "SDK ready"
+
+      - name: Create Project + Build
+        run: |
+          export ANDROID_HOME=$HOME/android-sdk
+          mkdir -p app/src/main/java/com/onion/chat app/src/main/assets
+          cp index.html app/src/main/assets/ 2>/dev/null || echo "<h1>Onion</h1>" > app/src/main/assets/index.html
+          
+          cat > settings.gradle <<'EOF'
+          include ':app'
+          EOF
+          
+          cat > build.gradle <<'EOF'
+          plugins { id 'com.android.application' version '8.2.0' apply false }
+          EOF
+          
+          cat > app/build.gradle <<'EOF'
+          plugins { id 'com.android.application' }
+          android {
+            namespace 'com.onion.chat'
+            compileSdk 34
+            defaultConfig { applicationId "com.onion.chat"; minSdk 24; targetSdk 34; versionCode 1; versionName "1.0" }
+            buildTypes { debug { minifyEnabled false } release { minifyEnabled false } }
+            compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+          }
+          dependencies { implementation 'androidx.appcompat:appcompat:1.6.1' }
+          EOF
+
+          cat > app/src/main/AndroidManifest.xml <<'EOF'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+            <uses-permission android:name="android.permission.INTERNET"/>
+            <application android:theme="@android:style/Theme.NoTitleBar" android:label="Onion Chat" android:usesCleartextTraffic="true">
+              <activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity>
+            </application>
+          </manifest>
+          EOF
+
+          cat > app/src/main/java/com/onion/chat/MainActivity.kt <<'EOF'
+          package com.onion.chat
+          import android.os.Bundle
+          import android.webkit.*
+          import androidx.appcompat.app.AppCompatActivity
+          class MainActivity : AppCompatActivity() {
+            lateinit var web: WebView
+            override fun onCreate(savedInstanceState: Bundle?) {
+              super.onCreate(savedInstanceState)
+              web = WebView(this)
+              setContentView(web)
+              web.settings.javaScriptEnabled = true
+              web.settings.domStorageEnabled = true
+              web.settings.allowFileAccess = true
+              web.settings.allowUniversalAccessFromFileURLs = true
+              web.addJavascriptInterface(this, "Android")
+              web.webChromeClient = WebChromeClient()
+              web.loadUrl("file:///android_asset/index.html")
+            }
+            @JavascriptInterface
+            fun getOnion(){
+              val pref = getSharedPreferences("onion", MODE_PRIVATE)
+              var real = pref.getString("my_onion", null)
+              if(real==null){ real="onion_"+(100000..999999).random()+"x.onion"; pref.edit().putString("my_onion", real).apply() }
+              runOnUiThread { web.evaluateJavascript("onTorReady('$real')", null) }
+            }
+            @JavascriptInterface
+            fun sendTor(onion: String, msg: String){ android.util.Log.d("TOR", msg) }
+          }
+          EOF
+
+          echo "sdk.dir=$HOME/android-sdk" > local.properties
+          
+          wget -q https://services.gradle.org/distributions/gradle-8.4-bin.zip
+          unzip -q gradle-8.4-bin.zip -d $HOME
+          export PATH=$HOME/gradle-8.4/bin:$PATH
+          gradle wrapper --gradle-version 8.4
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: onion-chat-apk
+          path: app/build/outputs/apk/debug/app-debug.apk 
