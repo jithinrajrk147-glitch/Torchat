@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Onion Chat</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:sans-serif}
+body{background:#08080a;color:#fff;padding:12px}
+.h{font-weight:800;font-size:20px;display:flex;justify-content:space-between;margin-bottom:10px}
+.dot{width:10px;height:10px;background:#555;border-radius:50%;display:inline-block}
+.dot.on{background:#b6ff5c;box-shadow:0 0 10px #b6ff5c;animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.4}}
+.card{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:18px;padding:12px;display:flex;gap:10px;align-items:center;margin-bottom:8px}
+.card img{width:46px;height:46px;border-radius:12px}
+.online{color:#b6ff5c;font-size:11px}.off{color:#ff5c5c;font-size:11px}
+button{border:0;border-radius:12px;padding:10px 14px;font-weight:700}
+.msg{flex:1;background:#111;border:1px solid #222;border-radius:12px;padding:11px;color:#fff;outline:none}
+.msgs{height:300px;overflow:auto;background:#0e0e12;border-radius:16px;padding:12px;margin:8px 0;display:flex;flex-direction:column;gap:8px}
+.b{max-width:80%;padding:10px 12px;border-radius:16px;font-size:14px}
+.me{align-self:flex-end;background:#b6ff5c;color:#000;font-weight:600}
+.them{align-self:flex-start;background:#222}
+.onion{font-family:monospace;font-size:11px;color:#b6ff5c;word-break:break-all;background:#000;border:1px dashed rgba(182,255,92,0.4);padding:10px;border-radius:10px;margin-bottom:10px}
+.addBox{display:flex;gap:8px;margin-bottom:10px}
+</style>
+</head>
+<body>
+<div class="h"><span>ONION CHAT</span><span><span id="dot" class="dot"></span> <small id="status">STARTING</small></span></div>
+
+<div id="onionBox" class="onion">⚡ Generating onion 0 sec... </div>
+
+<div class="addBox">
+<input id="addOnion" class="msg" placeholder="Paste friend.onion link">
+<button onclick="addFriend()" style="background:#fff">ADD</button>
+</div>
+
+<div id="friends"></div>
+<div class="msgs" id="chat"></div>
+<div style="display:flex;gap:8px">
+<input id="input" class="msg" placeholder="Message via Tor...">
+<button onclick="send()" style="background:#b6ff5c">➤</button>
+</div>
+
+<script>
+let friends = JSON.parse(localStorage.getItem('tor_friends')||'[]');
+if(friends.length==0){
+ friends=[
+  {name:"Kenji",img:"https://i.pravatar.cc/100?img=12",online:true,onion:"demo.onion"},
+ ]
+}
+let active = friends[0];
+let messages = JSON.parse(localStorage.getItem('tor_msgs')||'[]');
+
+function save(){ localStorage.setItem('tor_friends',JSON.stringify(friends)); localStorage.setItem('tor_msgs',JSON.stringify(messages)); }
+
+function renderFriends(){
+ document.getElementById('friends').innerHTML=friends.map((f,i)=>`
+  <div class="card" onclick="active=friends[${i}];renderChat()">
+   <img src="${f.img}">
+   <div style="flex:1"><b>${f.name}</b><br><span class="${f.online?'online':'off'}">${f.online?'● ONLINE - Tap to chat':'○ OFFLINE'}</span><br><small style="font-size:9px;opacity:.5">${f.onion.slice(0,22)}...</small></div>
+   <button style="background:${f.online?'#fff':'#333'};color:${f.online?'#000':'#777'}">MSG</button>
+  </div>
+ `).join('');
+}
+renderFriends();
+
+function renderChat(){
+ let filtered = messages.filter(m=>m.to==active.onion || m.from==active.onion);
+ document.getElementById('chat').innerHTML=filtered.map(m=>`<div class="b ${m.me?'me':'them'}">${m.text}</div>`).join('');
+ document.getElementById('chat').scrollTop=9999;
+}
+renderChat();
+
+function addFriend(){
+ let o=document.getElementById('addOnion').value.trim().toLowerCase();
+ if(!o.includes('.onion')){alert('Put real.onion link bro');return;}
+ // Prevent duplicate
+ if(friends.find(f=>f.onion==o)){alert('Already added');return;}
+ friends.push({name:o.slice(0,6),img:"https://i.pravatar.cc/100?img="+Math.floor(Math.random()*70),online:true,onion:o});
+ save(); renderFriends(); document.getElementById('addOnion').value='';
+}
+
+function setOnion(addr, bootstrapped){
+ document.getElementById('onionBox').innerText="YOUR ONION (share this):\n"+addr;
+ if(bootstrapped){
+   document.getElementById('dot').className='dot on';
+   document.getElementById('status').innerText='ONLINE - 0 sec';
+ } else {
+   document.getElementById('dot').className='dot';
+   document.getElementById('status').innerText='BOOTSTRAP '+addr;
+ }
+}
+
+// 0 SEC TRICK - Show cached onion instantly, then update when Tor ready
+let cached = localStorage.getItem('my_onion');
+if(cached){ setOnion(cached, false); }
+
+function onTorReady(realOnion){
+ localStorage.setItem('my_onion', realOnion);
+ setOnion(realOnion, true);
+}
+
+function send(){
+ let t=document.getElementById('input').value.trim(); if(!t) return;
+ if(!active){alert('Select friend');return;}
+ messages.push({me:true,text:t,to:active.onion,from:'me'}); save(); renderChat();
+ document.getElementById('input').value='';
+ if(window.Android) window.Android.sendTor(active.onion,t);
+ else { // browser test
+   setTimeout(()=>{messages.push({me:false,text:"(demo) got: "+t,from:active.onion,to:'me'});save();renderChat()},500);
+ }
+}
+
+function onTorMessage(fromOnion, msg){
+ messages.push({me:false,text:msg,from:fromOnion,to:'me'}); save(); renderChat();
+ // If new friend, auto-add
+ if(!friends.find(f=>f.onion==fromOnion)){
+   friends.push({name:fromOnion.slice(0,6),img:"https://i.pravatar.cc/100?img=8",online:true,onion:fromOnion});
+   save(); renderFriends();
+ }
+}
+
+// Auto load onion from Android
+setInterval(()=>{ if(window.Android) window.Android.getOnion(); },1500);
+</script>
+</body>
+</html>
