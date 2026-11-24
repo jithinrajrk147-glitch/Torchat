@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>BLACKSTRINGS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- CHAT LIST VIEW -->
+    <section id="view-list" class="view active">
+      <header class="topbar">
+        <div class="brand">
+          <svg class="brand-logo" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M8.5 12.5L12 7l3.5 5.5L12 17z" fill="currentColor" stroke="none" />
+          </svg>
+          <span>BLACKSTRINGS</span>
+        </div>
+        <div class="topbar-actions">
+          <button id="btn-tor-status" class="status-pill" title="Sync Now">
+            <span class="status-dot"></span>
+            <span id="tor-status-text">BOOTSTRAPPING</span>
+          </button>
+          <button id="btn-identity" class="icon-btn" aria-label="My Onion ID">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="7" height="7" rx="1" />
+              <rect x="14" y="3" width="7" height="7" rx="1" />
+              <rect x="3" y="14" width="7" height="7" rx="1" />
+              <path d="M14 14h3v3h-3zM17 17h4v4h-4zM14 20h3" />
+            </svg>
+          </button>
+          <button id="btn-settings" class="icon-btn" aria-label="Mailbox & Network Settings">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.6.77 1.02 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <div class="search-wrap">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8" />
+          <path d="M21 21l-4.35-4.35" />
+        </svg>
+        <input id="search-input" type="search" placeholder="Search friends or .onion address..." autocomplete="off" />
+      </div>
+
+      <div id="mailbox-banner" class="mailbox-banner hidden">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22 12h-6l-2 3h-4l-2-3H2" />
+          <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+        </svg>
+        <span>Mailbox Relay Active (<strong id="mailbox-count">0</strong> encrypted packets queued)</span>
+      </div>
+
+      <div id="chat-list" class="chat-list"></div>
+
+      <button id="btn-add-friend" class="fab" aria-label="Add Friend">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+      </button>
+    </section>
+
+    <!-- CHAT VIEW -->
+    <section id="view-chat" class="view">
+      <header class="topbar chat-header">
+        <button id="btn-back" class="icon-btn" aria-label="Back">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <path d="M19 12H5M12 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <div class="chat-peer-info">
+          <div id="chat-peer-name" class="peer-name">Peer</div>
+          <div id="chat-peer-onion" class="peer-onion">...onion</div>
+        </div>
+        <button id="btn-chat-sync" class="icon-btn" aria-label="Sync">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M23 4v6h-6M1 20v-6h6" />
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+          </svg>
+        </button>
+      </header>
+
+      <main id="messages-container" class="messages-container"></main>
+
+      <!-- Reply Preview Bar -->
+      <div id="reply-bar" class="reply-bar hidden">
+        <div class="reply-bar-accent"></div>
+        <div class="reply-bar-content">
+          <span class="reply-bar-label">Replying to</span>
+          <span id="reply-bar-text" class="reply-bar-text"></span>
+        </div>
+        <button id="btn-cancel-reply" class="icon-btn small" aria-label="Cancel Reply">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <!-- Media Bubble Pop Menu -->
+      <div id="media-menu" class="media-menu hidden">
+        <button class="media-opt" data-kind="image">
+          <span class="media-opt-circle">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" />
+              <circle cx="8.5" cy="8.5" r="1.5" />
+              <path d="M21 15l-5-5L5 21" />
+            </svg>
+          </span>
+          <span>Photo</span>
+        </button>
+        <button class="media-opt" data-kind="video">
+          <span class="media-opt-circle">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="23 7 16 12 23 17 23 7" />
+              <rect x="1" y="5" width="15" height="14" rx="2" />
+            </svg>
+          </span>
+          <span>Video</span>
+        </button>
+        <button class="media-opt" data-kind="file">
+          <span class="media-opt-circle">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+            </svg>
+          </span>
+          <span>File</span>
+        </button>
+        <button class="media-opt" data-kind="camera">
+          <span class="media-opt-circle">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+              <circle cx="12" cy="13" r="4" />
+            </svg>
+          </span>
+          <span>Camera</span>
+        </button>
+      </div>
+
+      <!-- Transparent Composer with Pill Input -->
+      <footer class="composer-wrap">
+        <div class="composer-pill">
+          <button id="btn-media" class="pill-btn left" aria-label="Attach Media">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </button>
+          <input id="msg-input" type="text" placeholder="Encrypted message..." autocomplete="off" />
+          <span id="rec-timer" class="rec-timer hidden">0:00</span>
+          <button id="btn-mic" class="pill-btn right" aria-label="Record Voice Note">
+            <svg id="icon-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8" />
+            </svg>
+            <svg id="icon-stop" class="hidden" viewBox="0 0 24 24" fill="#f85149">
+              <rect x="6" y="6" width="12" height="12" rx="2" />
+            </svg>
+          </button>
+          <button id="btn-send" class="pill-btn send" aria-label="Send">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <line x1="22" y1="2" x2="11" y2="13" />
+              <polygon points="22 2 15 22 11 13 2 9 22 2" />
+            </svg>
+          </button>
+        </div>
+      </footer>
+    </section>
+
+    <!-- SMART LONG-PRESS CONTEXT MENU -->
+    <div id="context-menu" class="context-menu hidden">
+      <button data-action="copy">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="9" y="9" width="13" height="13" rx="2" />
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+        </svg>
+        <span>Copy</span>
+      </button>
+      <button data-action="reply">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="9 17 4 12 9 7" />
+          <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+        </svg>
+        <span>Reply</span>
+      </button>
+      <button data-action="forward">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="15 17 20 12 15 7" />
+          <path d="M4 18v-2a4 4 0 0 1 4-4h12" />
+        </svg>
+        <span>Forward</span>
+      </button>
+      <button data-action="delete" class="danger">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="3 6 5 6 21 6" />
+          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+        </svg>
+        <span>Delete</span>
+      </button>
+    </div>
+
+    <!-- ONBOARDING / IDENTITY MODAL -->
+    <div id="modal-identity" class="modal hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2>Your Tor v3 Identity</h2>
+          <button class="icon-btn close-modal" data-close="modal-identity">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <p class="modal-sub">No server, no phone number. Share your Onion ID or QR code with friends.</p>
+        <div id="my-qr" class="qr-box"></div>
+        <div class="onion-box" id="my-onion-display">Generating .onion...</div>
+        <div class="modal-actions">
+          <button id="btn-copy-onion" class="btn-primary">Copy Onion ID</button>
+          <button id="btn-onboarding-add" class="btn-secondary">Add Friend</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ADD FRIEND MODAL -->
+    <div id="modal-add-friend" class="modal hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2>Add Peer</h2>
+          <button class="icon-btn close-modal" data-close="modal-add-friend">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div class="form-group">
+          <label>Friend Name</label>
+          <input id="input-friend-name" type="text" placeholder="Alias (e.g. Ghost)" />
+        </div>
+        <div class="form-group">
+          <label>Tor v3 .onion Address</label>
+          <div class="input-with-btn">
+            <input id="input-friend-onion" type="text" placeholder="56-char...onion" />
+            <button id="btn-scan-qr" class="icon-btn" title="Scan QR">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2" />
+                <line x1="7" y1="12" x2="17" y2="12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Friend's Mailbox Relay .onion (Optional)</label>
+          <input id="input-friend-mailbox" type="text" placeholder="Relay .onion for offline delivery" />
+        </div>
+        <button id="btn-save-friend" class="btn-primary full">Save Peer</button>
+      </div>
+    </div>
+
+    <!-- SETTINGS / MAILBOX MODAL -->
+    <div id="modal-settings" class="modal hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2>Tor & Mailbox Node</h2>
+          <button class="icon-btn close-modal" data-close="modal-settings">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div class="setting-row">
+          <div>
+            <div class="setting-title">Mailbox / Relay Mode</div>
+            <div class="setting-desc">Store-and-forward encrypted packets for offline friends. Zero decryption access.</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="toggle-mailbox" />
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div class="form-group">
+          <label>Default Mailbox Relay (.onion)</label>
+          <input id="input-default-relay" type="text" placeholder="Optional fallback relay .onion" />
+        </div>
+        <div class="stats-row">
+          <span>Pending Outbox: <strong id="stat-pending">0</strong></span>
+          <span>Relayed Packets: <strong id="stat-mailbox">0</strong></span>
+        </div>
+        <button id="btn-save-settings" class="btn-primary full">Save & Sync Now</button>
+      </div>
+    </div>
+
+    <!-- FORWARD PICKER MODAL -->
+    <div id="modal-forward" class="modal hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2>Forward To</h2>
+          <button class="icon-btn close-modal" data-close="modal-forward">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div id="forward-list" class="forward-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
